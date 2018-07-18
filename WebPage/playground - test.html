@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Blockly Playground</title>
+<script src="blockly/blockly_uncompressed.js"></script>
+<script src="blockly/generators/python.js"></script>
+<script src="blockly/generators/python/logic.js"></script>
+<script src="blockly/generators/python/loops.js"></script>
+<script src="blockly/generators/python/math.js"></script>
+<script src="blockly/generators/python/text.js"></script>
+<script src="blockly/generators/python/lists.js"></script>
+<script src="blockly/generators/python/colour.js"></script>
+<script src="blockly/generators/python/variables.js"></script>
+<script src="blockly/generators/python/procedures.js"></script>
+<script src="blockly/msg/messages.js"></script>
+<script src="blockly/blocks/logic.js"></script>
+<script src="blockly/blocks/loops.js"></script>
+<script src="blockly/blocks/math.js"></script>
+<script src="blockly/blocks/text.js"></script>
+<script src="blockly/blocks/lists.js"></script>
+<script src="blockly/blocks/colour.js"></script>
+<script src="blockly/blocks/variables.js"></script>
+<script src="blockly/blocks/procedures.js"></script>
+<script src="blockly/jquery-3.2.1.min.js"></script>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+'use strict';
+var workspace = null;
+var fakeDragStack = [];
+var selected = null;
+//to store input numbers
+var arr = [];
+var content = null;
+
+function start() {
+	setBackgroundColor();
+
+	var toolbox = document.getElementById('toolbox-categories');
+	var rtl = false;
+	var side = "start";
+	// Create main workspace. inject Blockly into an empty div'blocklyDiv',and set toolbox
+	workspace = Blockly.inject('blocklyDiv',
+					{comments: true,
+					 collapse: true,
+					 disable: true,
+					 grid:
+						 {spacing: 25,
+							length: 3,
+							colour: '#ccc',
+							snap: true},
+					 horizontalLayout: side == 'top' || side == 'bottom',
+					 maxBlocks: Infinity,
+					 media: '../media/',
+					 oneBasedIndex: true,
+					 readOnly: false,
+					 rtl:rtl,
+					 scrollbars: true,
+					 toolbox: toolbox,
+					 toolboxPosition: side == 'top' || side == 'start' ? 'start' : 'end',
+					 zoom:
+						 {controls: true,
+							wheel: true,
+							startScale: 1.0,
+							maxScale: 4,
+							minScale: .25,
+							scaleSpeed: 1.1}
+					});
+	taChange();
+	connectWithQt();
+}
+
+function setBackgroundColor() {
+	var lilac = '#d6d6ff';
+
+	var currentPage = window.location.href;
+	var regexFile = /^file[\S]*$/;
+
+	if (regexFile.test(currentPage)) {
+		document.getElementsByTagName('body')[0].style.backgroundColor = lilac;
+	}
+}
+
+// Preserve text between page reloads.
+function taChange() {
+	var textarea = document.getElementById('importExport');
+	if (sessionStorage) {
+		sessionStorage.setItem('textarea', textarea.value);
+	}
+}
+
+function connectWithQt() {	
+	new QWebChannel(qt.webChannelTransport,function(channel){
+		//make dialog object accessible globally
+		//把对象赋值到JS中
+		content = channel.objects.content;
+
+		//sendText 是一个c++中的signal		
+		content.sendText.connect(function(message){
+            handleMessage(message);
+		});
+
+		content.receiveText("Initialized");
+	});
+}
+
+function handleMessage(message) {
+	var data = message.split('\n');
+ for(var j=0;j<childBlocks.length;j++)
+	 	{
+	 		childBlocks[j].getField("NUM").setText()
+	 		
+	 	}
+
+}
+
+
+function askForData() {	  
+	//if() 
+    var blocks = workspace.getAllBlocks();
+	var pattern = /lists_create_with/;
+	var block =null;
+	var message;
+    for(var i=0;i<blocks.length;i++) {
+	 	if(blocks[i].type.match(pattern)){	 		
+	 		block = blocks[i];
+	 		var childBlocks=block.getChildren();
+	 		if(childBlocks.length==7){
+	 			message = "axisInfo";
+		    }
+	 		else if(childBlocks.length==6){
+	 			message = "posInfo";
+			}	 	 	
+	 	}
+	 }	 
+	
+	var string = "ask for data of "+message;
+	content.receiveText(string);
+}
+
+
+function toCode(lang) {	
+	var blocks = workspace.getAllBlocks();
+	// var pattern = /procedures_callnoreturn/;
+	// var num = 0;
+	// for(var i=0;i<blocks.length;i++) {
+	// 	//output.value += blocks[i].type;
+	// 	if(blocks[i].type.match(pattern)){
+	// 		num++;
+	// 	};
+	// }
+	// var output = document.getElementById('importExport');
+	// var text = Blockly[lang].workspaceToCode(workspace);
+	// text = text.split('\n');
+	// var str="";
+	// for(var i=num;i>0;i--) {
+	// 	str += text[text.length-i-1];
+	// 	str += ";\n";
+	// }
+
+
+	// output.value = text[text.length-2];
+
+	var output = document.getElementById('importExport');
+	var text = Blockly[lang].workspaceToCode(workspace);
+
+    text = text.split('\n');
+    var str="";
+
+    for(var i=0;i<text.length;i++) {
+        // add ";" first
+        if(text[i].substr(0,6)==="  move"||text[i].substr(0,4)==="move") {
+        	text[i]+=";";
+        }
+    }
+    for(var i=0;i<text.length-1;i++) {
+        //add "end" behind if_else and while
+        if(text[i].substr(0,2)==="  "){
+        	if(text[i+1].substr(0,2)!=="  "&&text[i+1].substr(0,4)!=="else")
+        	{
+        		text.splice(i+1,0,"end");
+        	}
+        }
+    }
+     
+    var num = 0;
+    for(var i=0;i<text.length;i++) {
+    	  //find first movexxx
+		if(text[i].substr(0,4)==="move") {
+			num = i;
+			break;
+		}
+         //find first if_else/while
+		if(text[i].substr(0,2)==="if"||text[i].substr(0,5)==="while")
+        {
+			num = i;
+			break;
+		}
+    }
+            
+    for(var i=num;i<text.length;i++) {
+		str += text[i];
+	    str += "\n";
+	}
+
+	output.value = str;
+	taChange();
+}
+
+//send generated command to Qt
+function sendCommand() {
+	toCode('Python');
+	var textarea = document.getElementById('importExport');
+	var text = textarea.value;
+	content.receiveText(text);
+}
+
+function output(message) {
+	var textarea = document.getElementById('importExport');
+	textarea.value = message;
+}
+
+function stop() {
+	workspace.clear();
+	output("");
+}
+
+
+function addValue(newValue) 
+{   
+  if(selected !== Blockly.selected) {
+  	selected = Blockly.selected;  	
+  	newValue = newValue.substr(newValue.length-1);
+    arr=[newValue];
+  }
+  else {  
+  	//var string = Blockly.selected.getFieldValue("NUM");
+  	arr.push(newValue);
+  }  
+  var str=arr.join("");
+  updateValue(str);
+} 
+
+function backspace()
+{
+  arr.pop();
+  //var str = Blockly.selected.getField("NUM").text_;
+  var str = Blockly.selected.getFieldValue("NUM");
+  str = str.substr(0,str.length-1);
+  updateValue(str);
+}
+
+function clearValue()
+{
+  arr=[];
+  updateValue("");
+}
+
+function updateValue(newValue) 
+{	  
+  // var textarea = document.getElementById('importExport');
+  // textarea.value = newValue;
+  //find the field_number object, get the value
+  var field = Blockly.selected.getField('NUM');
+  field.setText(newValue);
+  field.setConstraints(0,100000.0,0.0001);
+  var text = field.text_;
+  Blockly.selected.getField('NUM').setText(parseFloat(text).toPrecision(7));
+}
+</script>
+
+<style>
+html, body {
+	height: 100%;
+}
+body {
+	background-color: #fff;
+	font-family: sans-serif;
+	overflow: hidden;
+}
+h1 {
+	font-weight: normal;
+	font-size: 140%;
+}
+#blocklyDiv {
+	float: right;
+	height: 95%;
+	width: 70%;
+}
+#importExport {
+	font-family: monospace;
+}
+
+.ioLabel>.blocklyFlyoutLabelText {
+	font-style: italic;
+}
+
+#input_cur{ border:1px solid #f00 width:160px;}
+.c_button{border:2px solid #f00; height:40px; width:50px; font-size:16px; font-family:"微软雅黑"; background-color:#fff;color:#000;}
+.i_button{ border:none; height:40px; width:50px; font-size:16px; font-family:"微软雅黑"; background-color:#666; color:#fff;}
+.i_button:active{ background-color:#999;}
+.i_button_num{}
+.i_button_btn{width:50px;}
+.i_button_bs{width:160px;}
+
+
+</style>
+</head>
+<body onload="start()">
+	<div id="blocklyDiv"></div>
+	<h1>Blockly Playground</h1>
+	<p> 
+		<!-- <input type="button" value="To Python" onclick="toCode('Python')">
+		<br> -->
+		<textarea id="importExport" style="width: 26%; height: 12em"
+			onchange="taChange();" onkeyup="taChange()"></textarea>
+	</p>
+	<div>
+		<input class="c_button" type="button" value="Start" onclick="sendCommand()">
+		<input class="c_button" type="button" value="Stop" onclick="stop()">
+		<input class="c_button" type="button" value="ImportData" onclick="askForData()">
+		<br>
+		&nbsp;
+	</div>
+	<div>
+		<!-- <input id="input_cur" type="number" readonly="readonly"/> -->
+		<table>
+			<tbody>
+				<tr>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('9');" value="9"></td>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('8');" value="8"></td>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('7');" value="7"></td>
+				</tr>
+				<tr>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('6');" value="6"></td>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('5');" value="5"></td>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('4');" value="4"></td>
+				</tr>
+				<tr>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('3');" value="3"></td>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('2');" value="2"></td>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('1');" value="1"></td>
+				</tr>
+				<tr>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('0');" value="0"></td>
+					<td><input class="i_button i_button_num" type=button onclick="addValue('.');" value="."></td>	
+					<td><input class="i_button i_button_btn" type=button onclick="clearValue();" value="清空"></td>			
+				</tr>
+				<tr>
+					<td colspan="3"><input class="i_button i_button_bs" type=button onclick="backspace();" value="backspace"></td>
+				</tr>									
+			</tbody>
+		</table>
+	</div>
+	<xml id="toolbox-categories" style="display: none">
+		<category name="Others" colour="300">			
+			<block type="lists_create_with"></block>
+			<block type="controls_ifelse"></block>
+			<block type="controls_whileUntil"></block>
+			<block type="logic_compare"></block>
+			<block type="variables_get">
+      			<field name="VAR" id="9t!+ecCRMs@[uO/rR(5n" variabletype="">var</field>
+    		</block>
+    		<block type="logic_negate"></block>
+    		<block type="math_number" gap="32"></block>
+		</category>
+
+		 <category name="Custom Functions" colour="#5b6da5">
+			<block type="procedures_callnoreturn";>
+				<mutation name="movej">
+					<arg name="axis"></arg>
+					<arg name="v"></arg>
+					<arg name="a"></arg>
+					<arg name="rad"></arg>
+				</mutation>
+				<value name="ARG0">
+					<block type="lists_create_with">
+						<mutation items="7"></mutation>
+						<value name="ADD0">
+							<block type="math_number">
+								<field name="NUM">0</field>
+							</block>
+						</value>
+						<value name="ADD1">
+							<block type="math_number">
+								<field name="NUM">0</field>
+							</block>
+						</value>
+						<value name="ADD2">
+							<block type="math_number">
+								<field name="NUM">0</field>
+							</block>
+						</value>
+						<value name="ADD3">
+							<block type="math_number">
+								<field name="NUM">0</field>
+							</block>
+						</value>
+						<value name="ADD4">
+							<block type="math_number">
+								<field name="NUM">0</field>
+							</block>
+						</value>
+						<value name="ADD5">
+							<block type="math_number">
+								<field name="NUM">0</field>
+							</block>
+						</value>
+						<value name="ADD6">
+							<block type="math_number">
+								<field name="NUM">0</field>
+							</block>
+						</value>
+					</block>
+				</value>
+				<value name="ARG1">
+					<block type="math_number">
+						<field name="NUM">0</field>
+					</block>
+				</value>
+				<value name="ARG2">
+					<block type="math_number">
+						<field name="NUM">0</field>
+					</block>
+				</value>
+				<value name="ARG3">
+					<block type="math_number">
+						<field name="NUM">0</field>
+					</block>
+				</value>
+			</block>
+		<block type="procedures_callnoreturn">
+			<mutation name="movej_pose">
+				<arg name="p"></arg>
+				<arg name="v"></arg>
+				<arg name="a"></arg>
+			</mutation>
+			<value name="ARG0">
+				<block type="lists_create_with">
+					<mutation items="6"></mutation>
+					<value name="ADD0">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD1">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD2">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD3">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD4">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD5">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+				</block>
+			</value>
+			<value name="ARG1">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG2">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+		</block>
+		<block type="procedures_callnoreturn">
+			<mutation name="movel">
+				<arg name="p"></arg>
+				<arg name="v"></arg>
+				<arg name="a"></arg>
+				<arg name="rad"></arg>
+				<arg name="psi"></arg>
+			</mutation>
+			<value name="ARG0">
+				<block type="lists_create_with">
+					<mutation items="6"></mutation>
+					<value name="ADD0">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD1">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD2">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD3">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD4">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD5">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+				</block>
+			</value>
+			<value name="ARG1">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG2">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG3">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG4">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+		</block>
+		<block type="procedures_callnoreturn">
+			<mutation name="movec">
+				<arg name="p1"></arg>
+				<arg name="p2"></arg>
+				<arg name="v"></arg>
+				<arg name="a"></arg>
+				<arg name="rad"></arg>
+				<arg name="psi"></arg>
+			</mutation>
+			<value name="ARG0">
+				<block type="lists_create_with">
+					<mutation items="6"></mutation>
+					<value name="ADD0">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD1">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD2">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD3">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD4">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD5">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+				</block>
+			</value>
+			<value name="ARG1">
+				<block type="lists_create_with">
+					<mutation items="6"></mutation>
+					<value name="ADD0">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD1">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD2">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD3">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD4">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+					<value name="ADD5">
+						<block type="math_number">
+							<field name="NUM">0</field>
+						</block>
+					</value>
+				</block>
+			</value>
+			<value name="ARG2">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG3">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG4">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG5">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+		</block>
+		<block type="procedures_callnoreturn">
+			<mutation name="tcp_move">
+				<arg name="x"></arg>
+				<arg name="y"></arg>
+				<arg name="z"></arg>
+				<arg name="v"></arg>
+			</mutation>
+			<value name="ARG0">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG1">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG2">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+			<value name="ARG3">
+				<block type="math_number">
+					<field name="NUM">0</field>
+				</block>
+			</value>
+		</block>
+	</category>
+	</xml>
+</body>
+</html>
